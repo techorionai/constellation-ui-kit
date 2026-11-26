@@ -45,10 +45,37 @@ function App() {
 }
 ```
 
+## Login
+
+Applications log in users through the identity service. The kit has no login form. It sends the user to the hosted login of identity.
+
+```tsx
+import {
+  AuthCallback,
+  AuthProvider,
+  RequireAuth,
+  UserMenu,
+} from '@techorionai/constellation-ui-kit';
+
+<AuthProvider
+  issuer="https://id.example.com"
+  clientId="helpdesk-ui"
+  scopes={['helpdesk:ticket:read']}
+  appName="Helpdesk"
+>
+  <AppLayout appName="Helpdesk" navItems={[]} headerRight={<UserMenu />}>
+    {/* Render AuthCallback at /auth/callback. Put protected pages in RequireAuth. */}
+  </AppLayout>
+</AuthProvider>;
+```
+
+See [docs/login.md](docs/login.md) for the client registration, the callback route, step-up, and logout.
+
 ## Documentation
 
 - [Install](docs/install.md)
 - [Theme, color scheme, and Content Security Policy](docs/theme.md)
+- [Login on identity](docs/login.md)
 - [Components and API errors](docs/components.md)
 - [Development, tests, and release](docs/development.md)
 

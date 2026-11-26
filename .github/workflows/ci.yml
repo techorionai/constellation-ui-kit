@@ -9,4 +9,5 @@ jobs:
   frontend:
     uses: techorionai/constellation-ci/.github/workflows/frontend.yml@v0.4.0
     with:
+      integration-timeout-minutes: 45
       integration-command: npx playwright install --with-deps chromium && npm run test:integration

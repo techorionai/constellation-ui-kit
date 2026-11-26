@@ -10,6 +10,7 @@ const external = [
   'react-dom/client',
   /^@mantine\//,
   'vite',
+  'oauth4webapi',
   /^node:/,
 ];
 
