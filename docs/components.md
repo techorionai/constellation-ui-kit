@@ -71,6 +71,26 @@ Text "Page not found" and a link to the home page. Props `homePath` (default `/`
 
 React error boundary. It shows a general message and a "Reload" button. It does not show the error text. The optional `onError` callback gets the error one time.
 
+## Login components
+
+These components are inside `AuthProvider`. See [login.md](login.md) for the flow, the props, and the hooks.
+
+### LoginPage
+
+The page for a user who is not logged in. It shows the `appName` of `AuthProvider` (the optional prop `appName` replaces it), the last login error, and a "Log in" button. It has no form field. The login steps are on the hosted pages of identity.
+
+### UserMenu
+
+Avatar with the initials of the user. The menu shows the name and the email, a link "Account security" to `<issuer>/account/security` (it opens on the identity origin), and "Log out". It renders nothing when no user is logged in. Use it for `headerRight` of `AppLayout`.
+
+### RequireAuth
+
+Renders its children only when `status` is `authenticated`. It shows `LoadingState` while `status` is `loading`. In all other cases it shows `LoginPage`, or the element of the `loginPage` prop of `AuthProvider`.
+
+### AuthCallback
+
+The component of the callback route (`redirectPath`). It checks the response, exchanges the code, deletes `code` and `state` from the address with `history.replaceState`, and calls `navigate` with the return path. For an authorization error (for example `access_denied` or `invalid_scope`), it shows the error and a "Try again" button.
+
 ## Problem, isProblem, and parseProblem
 
 `Problem` is the type of an API error (RFC 9457). The field names follow `lib/errors.tsp` of `constellation-contracts`.

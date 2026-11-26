@@ -48,4 +48,6 @@ Scripts have no `unsafe-inline` and no `unsafe-eval`.
 
 `style-src` has `'unsafe-inline'` for this reason: `MantineProvider` adds `<style>` elements with the theme CSS variables at run time. Mantine components also set inline `style` attributes with CSS variables. A nonce does not cover `style` attributes. Thus `'unsafe-inline'` is necessary for styles. Inline scripts are the main risk of cross-site scripting, and the policy blocks them.
 
+An application that uses the login adds `connect-src 'self' <issuer>`, so the kit can call the token, revoke, and userinfo endpoints of identity. See [login.md](login.md).
+
 The integration test of the kit runs a consumer application with this policy and checks that the page has zero violations.
