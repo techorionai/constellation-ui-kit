@@ -1,0 +1,8 @@
+.navItem {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.requestId {
+  overflow-wrap: anywhere;
+}
