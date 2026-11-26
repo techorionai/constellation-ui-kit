@@ -234,3 +234,91 @@ describe('accessibility', () => {
     expect(link).toHaveAttribute('href', `${ISSUER}/account/security`);
   });
 });
+
+/** Log in through the callback and show the status. Render the children after it. */
+async function renderLoggedIn(children: ReactNode, props: Record<string, unknown> = {}) {
+  const { state, nonce } = await pendingLogin();
+  const h = makeHarness();
+  h.identity.nonce = nonce;
+  returnFrom(`?code=abc&state=${state}`);
+  function Status() {
+    const { status } = useAuth();
+    return <span data-testid="status">{status}</span>;
+  }
+  const view = renderWithProvider(
+    <Provider navigate={() => {}} {...props}>
+      <AuthCallback />
+      <Status />
+      {children}
+    </Provider>,
+  );
+  await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'));
+  return { view, h };
+}
+
+describe('review fixes', () => {
+  // R8
+  it('R8 RequireAuth shows the loading view, the custom login page, and the children', async () => {
+    window.history.replaceState({}, '', '/auth/callback');
+    const loading = renderWithProvider(
+      <Provider>
+        <RequireAuth>secret page</RequireAuth>
+      </Provider>,
+    );
+    expect(screen.queryByText('secret page')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Log in' })).not.toBeInTheDocument();
+    loading.unmount();
+
+    const { state } = await pendingLogin(true);
+    returnFrom(`?error=login_required&state=${state}`);
+    const custom = renderWithProvider(
+      <Provider loginPage={<p>custom login</p>}>
+        <AuthCallback />
+        <RequireAuth>secret page</RequireAuth>
+      </Provider>,
+    );
+    expect(await screen.findByText('custom login')).toBeInTheDocument();
+    expect(screen.queryByText('secret page')).not.toBeInTheDocument();
+    custom.unmount();
+
+    window.sessionStorage.clear();
+    await renderLoggedIn(<RequireAuth>secret page</RequireAuth>);
+    expect(screen.getByText('secret page')).toBeInTheDocument();
+  });
+
+  // R8
+  it('R8 the Log out item of UserMenu goes to the end session URL', async () => {
+    await renderLoggedIn(<UserMenu />);
+    redirects.length = 0;
+    await userEvent.click(screen.getByRole('button', { name: 'User menu' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Log out', hidden: true }));
+    await waitFor(() => expect(redirects).toHaveLength(1));
+    expect(new URL(redirects[0]!).pathname).toBe('/oauth/end_session');
+  });
+
+  // R7
+  it('R7 keeps the tokens when appName and navigate change', async () => {
+    const { state, nonce } = await pendingLogin();
+    const h = makeHarness();
+    h.identity.nonce = nonce;
+    returnFrom(`?code=abc&state=${state}`);
+    function Status() {
+      const { status } = useAuth();
+      return <span data-testid="status">{status}</span>;
+    }
+    function Wrapper() {
+      const [name, setName] = useState('Helpdesk');
+      return (
+        <Provider appName={name} navigate={() => {}}>
+          <AuthCallback />
+          <Status />
+          <button onClick={() => setName('Other')}>rename</button>
+        </Provider>
+      );
+    }
+    renderWithProvider(<Wrapper />);
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'));
+    await userEvent.click(screen.getByRole('button', { name: 'rename' }));
+    expect(screen.getByTestId('status')).toHaveTextContent('authenticated');
+  });
+});

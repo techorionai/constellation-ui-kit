@@ -1,5 +1,6 @@
 // The auth state of one tab. The tokens stay in the memory of this object only.
 import {
+  assertIssuer,
   buildAuthorizationUrl,
   buildEndSessionUrl,
   handleCallback,
@@ -30,12 +31,8 @@ export type CallbackOutcome =
   | { kind: 'unauthenticated'; returnTo: string }
   | { kind: 'error'; error: AuthError; returnTo: string };
 
-const SILENT_FAILURE_CODES = new Set([
-  'login_required',
-  'interaction_required',
-  'consent_required',
-  'account_selection_required',
-]);
+/** The revoke request at logout can take this long (milliseconds). Then the logout goes on. */
+const REVOKE_TIMEOUT_MS = 3000;
 
 function currentPath(): string {
   const { pathname, search, hash } = window.location;
@@ -53,9 +50,12 @@ export class AuthController {
   private refreshing: Promise<TokenSet> | null = null;
   private silentStarted = false;
   private callback: Promise<CallbackOutcome> | null = null;
+  /** Each clear or logout increases it. A refresh that ends after a change must not keep tokens. */
+  private session = 0;
   private channel: BroadcastChannel | null = null;
 
   constructor(options: ControllerOptions) {
+    assertIssuer(options.config.issuer);
     this.config = options.config;
     this.redirectPath = options.redirectPath;
     this.navigateTo = options.navigate;
@@ -88,6 +88,7 @@ export class AuthController {
   }
 
   private clear(): void {
+    this.session += 1;
     this.tokens = null;
     this.setState({ status: 'unauthenticated', user: null, error: null });
   }
@@ -140,35 +141,46 @@ export class AuthController {
     this.redirectTo(url.href);
   }
 
+  /** Revoke a refresh token. A slow identity service does not block the caller for long. */
+  private async revokeWithLimit(token: string): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const limit = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, REVOKE_TIMEOUT_MS);
+    });
+    try {
+      await Promise.race([revokeRefreshToken(this.config, token).catch(() => undefined), limit]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   login = async (returnTo?: string): Promise<void> => {
     await this.authorize({ returnTo: safeReturnPath(returnTo ?? currentPath()) });
   };
 
   stepUp = async (maxAge = 300): Promise<void> => {
+    // Build the request first. If the build fails, the tab keeps its tokens.
+    const url = await buildAuthorizationUrl(this.config, {
+      returnTo: currentPath(),
+      forceLogin: true,
+      maxAge,
+    });
     const refreshToken = this.tokens?.refreshToken;
     if (refreshToken && this.tokens) {
       // Each login makes a new refresh family. Revoke the old one first.
       this.tokens = { ...this.tokens, refreshToken: undefined };
-      try {
-        await revokeRefreshToken(this.config, refreshToken);
-      } catch {
-        // The login goes on. The old family ends with the session.
-      }
+      await this.revokeWithLimit(refreshToken);
     }
-    await this.authorize({ returnTo: currentPath(), forceLogin: true, maxAge });
+    this.redirectTo(url.href);
   };
 
   logout = async (): Promise<void> => {
     const tokens = this.tokens;
+    this.session += 1;
     this.setState({ status: 'loading', user: null, error: null });
     this.tokens = null;
-    if (tokens?.refreshToken) {
-      try {
-        await revokeRefreshToken(this.config, tokens.refreshToken);
-      } catch {
-        // End session at identity revokes the families too.
-      }
-    }
+    // End session at identity revokes the families too. A failed or slow revoke does not stop it.
+    if (tokens?.refreshToken) await this.revokeWithLimit(tokens.refreshToken);
     this.channel?.postMessage({ type: 'logout' });
     this.redirectTo(buildEndSessionUrl(this.config, tokens?.idToken).href);
   };
@@ -185,15 +197,25 @@ export class AuthController {
   private refresh(): Promise<TokenSet> {
     if (!this.refreshing) {
       const current = this.tokens;
+      const session = this.session;
       this.refreshing = (async () => {
         if (!current) throw new AuthError('login_required');
         try {
           const next = await refreshTokens(this.config, current);
+          if (session !== this.session) {
+            // A logout or a clear ran during the request. Do not log in again.
+            if (next.refreshToken) await this.revokeWithLimit(next.refreshToken);
+            throw new AuthError('login_required', { description: 'The user logged out.' });
+          }
           this.tokens = next;
           this.setState({ status: 'authenticated', user: next.user, error: null });
           return next;
         } catch (error) {
-          if (error instanceof AuthError && error.code === 'invalid_grant') {
+          if (
+            error instanceof AuthError &&
+            error.code === 'invalid_grant' &&
+            session === this.session
+          ) {
             this.clear();
             try {
               await this.login(currentPath());
@@ -223,7 +245,8 @@ export class AuthController {
       this.setState({ status: 'authenticated', user: result.tokens.user, error: null });
       return { kind: 'success', returnTo: result.returnTo };
     }
-    if (result.silent && SILENT_FAILURE_CODES.has(result.error.code)) {
+    // Any error of a silent request means that the tab has no session.
+    if (result.silent) {
       this.clear();
       return { kind: 'unauthenticated', returnTo: result.returnTo };
     }

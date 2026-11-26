@@ -41,15 +41,25 @@ export class FakeIdentity {
   refreshError: string | null = null;
   /** A hook that runs when a revoke request arrives. */
   onRevoke: (() => void) | null = null;
+  /** The `sub` claim of the next ID tokens. */
+  sub = 'user-1';
+  /** A promise that a refresh response waits for. */
+  holdRefresh: Promise<void> | null = null;
+  /** If true, a revoke request never ends. */
+  hangRevoke = false;
   private counter = 0;
 
   fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = input instanceof Request ? input.url : String(input);
     const body = new URLSearchParams(String(init?.body ?? ''));
     this.requests.push({ url, method: init?.method ?? 'GET', body });
-    if (url.endsWith('/oauth/token')) return this.token(body);
+    if (url.endsWith('/oauth/token')) {
+      if (body.get('grant_type') === 'refresh_token' && this.holdRefresh) await this.holdRefresh;
+      return this.token(body);
+    }
     if (url.endsWith('/oauth/revoke')) {
       this.onRevoke?.();
+      if (this.hangRevoke) return new Promise<Response>(() => undefined);
       return new Response(null, { status: 200 });
     }
     return new Response('not found', { status: 404 });
@@ -71,7 +81,7 @@ export class FakeIdentity {
     const now = Math.floor(Date.now() / 1000);
     const claims: Record<string, unknown> = {
       iss: this.idTokenIss,
-      sub: 'user-1',
+      sub: this.sub,
       aud: CLIENT_ID,
       iat: now,
       exp: now + this.expiresIn,

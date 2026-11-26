@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
   type ReactElement,
   type ReactNode,
@@ -64,21 +65,26 @@ export function AuthProvider({
 }: AuthProviderProps) {
   const issuerBase = issuer.replace(/\/+$/, '');
   const scopeKey = scopes.join(' ');
-  const controller = useMemo(
-    () =>
-      new AuthController({
-        config: {
-          issuer: issuerBase,
-          clientId,
-          scopes: scopeKey ? scopeKey.split(' ') : [],
-          redirectUri: window.location.origin + redirectPath,
-          postLogoutRedirectUri: window.location.origin + postLogoutPath,
-        },
-        redirectPath,
-        navigate: defaultNavigate,
-      }),
-    [issuerBase, clientId, scopeKey, redirectPath, postLogoutPath],
-  );
+  const key = [issuerBase, clientId, scopeKey, redirectPath, postLogoutPath].join('|');
+  const makeController = () =>
+    new AuthController({
+      config: {
+        issuer: issuerBase,
+        clientId,
+        scopes: scopeKey ? scopeKey.split(' ') : [],
+        redirectUri: window.location.origin + redirectPath,
+        postLogoutRedirectUri: window.location.origin + postLogoutPath,
+      },
+      redirectPath,
+      navigate: defaultNavigate,
+    });
+  // State, not a memo: React can drop a memo value, and then the tokens are lost.
+  const [held, setHeld] = useState(() => ({ key, controller: makeController() }));
+  let controller = held.controller;
+  if (held.key !== key) {
+    controller = makeController();
+    setHeld({ key, controller });
+  }
   // The handlers change with the props. The controller stays the same.
   useEffect(() => {
     controller.setHandlers({ navigate: navigate ?? defaultNavigate, redirect });

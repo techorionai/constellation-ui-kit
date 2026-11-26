@@ -205,3 +205,97 @@ describe('silent login', () => {
     expect(h.controller.getSnapshot().status).toBe('loading');
   });
 });
+
+describe('review fixes', () => {
+  // R9
+  it('R9 does not log in again when a logout runs during a refresh', async () => {
+    const h = makeHarness();
+    const stop = startOnCallbackPath(h);
+    await loginFully(h);
+    let release!: () => void;
+    h.identity.holdRefresh = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const refresh = h.controller.getAccessToken({ forceRefresh: true });
+    const settled = refresh.catch((error: unknown) => error);
+    await vi.waitFor(() => expect(h.identity.tokenRequests('refresh_token')).toHaveLength(1));
+    FakeChannel.instances[0]!.receive({ type: 'logout' });
+    h.identity.onRevoke = vi.fn();
+    release();
+    expect(await settled).toMatchObject({ code: 'login_required' });
+    expect(h.controller.getSnapshot().status).toBe('unauthenticated');
+    await expect(h.controller.getAccessToken()).rejects.toMatchObject({ code: 'login_required' });
+    // The new refresh token is revoked.
+    const revoke = h.identity.requests.find((r) => r.url.endsWith('/oauth/revoke'))!;
+    expect(revoke.body.get('token')).toBe('refresh-2');
+    stop();
+  });
+
+  // R11
+  it('R11 rejects a refresh response with a different sub', async () => {
+    const h = makeHarness();
+    await loginFully(h);
+    h.identity.sub = 'user-2';
+    await expect(h.controller.getAccessToken({ forceRefresh: true })).rejects.toMatchObject({
+      code: 'invalid_response',
+    });
+    expect(h.controller.getSnapshot().user?.sub).toBe('user-1');
+  });
+
+  // R5
+  it('R5 goes to end session after 3 seconds when the revoke request does not end', async () => {
+    const h = makeHarness();
+    await loginFully(h);
+    h.redirects.length = 0;
+    h.identity.hangRevoke = true;
+    vi.useFakeTimers();
+    try {
+      const done = h.controller.logout();
+      await vi.advanceTimersByTimeAsync(2900);
+      expect(h.redirects).toEqual([]);
+      await vi.advanceTimersByTimeAsync(200);
+      await done;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(new URL(h.redirects[0]!).pathname).toBe('/oauth/end_session');
+  });
+
+  // R6
+  it('R6 keeps the refresh token when the step-up request cannot be built', async () => {
+    const h = makeHarness();
+    await loginFully(h);
+    h.redirects.length = 0;
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage full');
+    });
+    try {
+      await expect(h.controller.stepUp(120)).rejects.toThrow();
+    } finally {
+      setItem.mockRestore();
+    }
+    expect(h.identity.requests.some((r) => r.url.endsWith('/oauth/revoke'))).toBe(false);
+    expect(h.redirects).toEqual([]);
+    expect(h.controller.getSnapshot().status).toBe('authenticated');
+    expect(await h.controller.getAccessToken({ forceRefresh: true })).toBe('access-2');
+    expect(h.identity.tokenRequests('refresh_token')[0]!.body.get('refresh_token')).toBe(
+      'refresh-1',
+    );
+  });
+
+  // R4
+  it('R4 treats any error of a silent request as unauthenticated', async () => {
+    const h = makeHarness();
+    await h.controller.login('/tickets/1');
+    const state = new URL(h.redirects[0]!).searchParams.get('state')!;
+    const key = `constellation-auth:tx:${state}`;
+    const tx = JSON.parse(window.sessionStorage.getItem(key)!);
+    window.sessionStorage.setItem(key, JSON.stringify({ ...tx, silent: true }));
+    const url = new URL(
+      `${window.location.origin}/auth/callback?error=server_error&state=${state}`,
+    );
+    const outcome = await h.controller.completeCallback(url);
+    expect(outcome.kind).toBe('unauthenticated');
+    expect(h.controller.getSnapshot().status).toBe('unauthenticated');
+  });
+});

@@ -88,3 +88,24 @@ describe('createAuthFetch', () => {
     expect(sent[2]!.headers.get('Authorization')).toBe('Bearer token-1');
   });
 });
+
+describe('createAuthFetch with other inputs', () => {
+  // R8
+  it('R8 adds the token to a Request input', async () => {
+    const { authFetch, sent } = setup([]);
+    await authFetch(new Request(`${window.location.origin}/v1/things`, { method: 'DELETE' }));
+    expect(sent[0]!.method).toBe('DELETE');
+    expect(sent[0]!.headers.get('Authorization')).toBe('Bearer token-1');
+  });
+
+  // R8
+  it('R8 sends the body again with the new token after a 401', async () => {
+    const { authFetch, sent } = setup([new Response(null, { status: 401 })]);
+    const response = await authFetch('/v1/things', { method: 'POST', body: '{"a":1}' });
+    expect(response.status).toBe(200);
+    expect(sent).toHaveLength(2);
+    expect(await sent[0]!.text()).toBe('{"a":1}');
+    expect(await sent[1]!.text()).toBe('{"a":1}');
+    expect(sent[1]!.headers.get('Authorization')).toBe('Bearer token-2');
+  });
+});

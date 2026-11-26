@@ -232,6 +232,8 @@ test.describe('login flow on identity', () => {
       window.localStorage.setItem('demo-scopes', 'demo:item:read');
     });
     await page.goto('/protected');
+    // The silent request fails with any error, so the page shows LoginPage first.
+    await page.getByRole('button', { name: 'Log in' }).click();
     await expect(page.getByRole('alert')).toContainText('invalid_scope');
     await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
   });

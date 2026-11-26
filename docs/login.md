@@ -83,16 +83,16 @@ function Tickets() {
 
 ### AuthProvider props
 
-| Prop             | Use                                                                                   |
-| ---------------- | ------------------------------------------------------------------------------------- |
-| `issuer`         | The issuer URL of identity. The value must be equal to `IDENTITY_ISSUER`.             |
-| `clientId`       | The ID of the public client.                                                          |
-| `scopes`         | The permission keys. The kit adds `openid`, `email`, `profile`, and `offline_access`. |
-| `appName`        | The name that `LoginPage` shows.                                                      |
-| `redirectPath`   | The callback route. The default is `/auth/callback`.                                  |
-| `postLogoutPath` | The path where identity sends the user after the logout. The default is `/`.          |
-| `navigate`       | Goes to a local path with no page load. Connect it to your router.                    |
-| `loginPage`      | An element that `RequireAuth` shows instead of `LoginPage`.                           |
+| Prop             | Use                                                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issuer`         | The issuer URL of identity. The value must be equal to `IDENTITY_ISSUER`. The kit accepts `http:` only for `localhost`, `127.0.0.1`, and `[::1]`. |
+| `clientId`       | The ID of the public client.                                                                                                                      |
+| `scopes`         | The permission keys. The kit adds `openid`, `email`, `profile`, and `offline_access`.                                                             |
+| `appName`        | The name that `LoginPage` shows.                                                                                                                  |
+| `redirectPath`   | The callback route. The default is `/auth/callback`.                                                                                              |
+| `postLogoutPath` | The path where identity sends the user after the logout. The default is `/`.                                                                      |
+| `navigate`       | Goes to a local path with no page load. Connect it to your router.                                                                                |
+| `loginPage`      | An element that `RequireAuth` shows instead of `LoginPage`.                                                                                       |
 
 The default of `navigate` runs `history.replaceState` and then sends a `popstate` event. The kit never loads a new page for the return path. A page load loses the tokens in memory and starts a new silent login.
 

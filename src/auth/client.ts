@@ -34,9 +34,25 @@ function clientOf(config: ClientConfig): oauth.Client {
   return { client_id: config.clientId, id_token_signed_response_alg: 'ES256' };
 }
 
-// oauth4webapi allows only HTTPS by default. Identity accepts HTTP for localhost only.
+// oauth4webapi allows only HTTPS by default. The kit allows HTTP for loopback hosts only.
+function isLoopbackHttp(issuer: string): boolean {
+  try {
+    const url = new URL(issuer);
+    return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Throw a configuration error for an `http:` issuer that is not a loopback host. */
+export function assertIssuer(issuer: string): void {
+  if (issuer.startsWith('http:') && !isLoopbackHttp(issuer)) {
+    throw new Error('The issuer must use HTTPS. HTTP is allowed only for localhost.');
+  }
+}
+
 function requestOptions(config: ClientConfig): { [oauth.allowInsecureRequests]?: boolean } {
-  return config.issuer.startsWith('http:') ? { [oauth.allowInsecureRequests]: true } : {};
+  return isLoopbackHttp(config.issuer) ? { [oauth.allowInsecureRequests]: true } : {};
 }
 
 export function toAuthError(error: unknown): AuthError {
@@ -113,6 +129,12 @@ function userFrom(claims: oauth.IDToken): AuthUser {
 function tokenSetFrom(result: oauth.TokenEndpointResponse, previous?: TokenSet): TokenSet {
   const claims = oauth.getValidatedIdTokenClaims(result);
   const user = claims ? userFrom(claims) : previous?.user;
+  // OpenID Connect Core section 12.2: a refresh gives the same subject.
+  if (user && previous && user.sub !== previous.user.sub) {
+    throw new AuthError('invalid_response', {
+      description: 'The subject of the new ID token is different.',
+    });
+  }
   if (!user) {
     throw new AuthError('invalid_response', { description: 'The response has no ID token.' });
   }

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildAuthorizationUrl, handleCallback, serverMetadata } from './client';
+import { assertIssuer, buildAuthorizationUrl, handleCallback, serverMetadata } from './client';
+import { AuthController } from './controller';
 import { callbackUrl, makeConfig, makeHarness, startLogin, ISSUER } from '../test/auth';
 
 beforeEach(() => window.sessionStorage.clear());
@@ -121,5 +122,30 @@ describe('server metadata', () => {
     const result = await handleCallback(makeConfig(), callbackUrl(state));
     expect(result.ok).toBe(false);
     expect(h.identity.requests.some((r) => r.url.includes('openid-configuration'))).toBe(false);
+  });
+});
+
+describe('issuer check', () => {
+  // R10
+  it('R10 allows HTTP for loopback hosts only', () => {
+    for (const issuer of ['http://localhost:8080', 'http://127.0.0.1:8080', 'http://[::1]:8080']) {
+      expect(() => assertIssuer(issuer)).not.toThrow();
+    }
+    expect(() => assertIssuer('https://id.example.com')).not.toThrow();
+    for (const issuer of ['http://id.example.com', 'http://identity.test:8080']) {
+      expect(() => assertIssuer(issuer)).toThrow(/HTTPS/);
+    }
+  });
+
+  // R10
+  it('R10 throws a configuration error when the controller gets a non-loopback HTTP issuer', () => {
+    expect(
+      () =>
+        new AuthController({
+          config: { ...makeConfig(), issuer: 'http://id.example.com' },
+          redirectPath: '/auth/callback',
+          navigate: () => undefined,
+        }),
+    ).toThrow(/HTTPS/);
   });
 });
