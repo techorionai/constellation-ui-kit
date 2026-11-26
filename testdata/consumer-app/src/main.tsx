@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import '@techorionai/constellation-ui-kit/styles.css';
+import { AuthApp } from './AuthApp';
 import {
   AppLayout,
   ConfirmAction,
@@ -25,7 +26,7 @@ const problem: Problem = {
   errors: [{ field: '/name', code: 'required', message: 'Name is required.' }],
 };
 
-function App() {
+function Demo() {
   return (
     <ConstellationProvider>
       <ErrorBoundary>
@@ -47,8 +48,9 @@ function App() {
   );
 }
 
+// With VITE_ISSUER the app uses the login flow. Without it, the app shows the pages of the kit only.
+const issuer = import.meta.env.VITE_ISSUER as string | undefined;
+
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+  <StrictMode>{issuer ? <AuthApp issuer={issuer} /> : <Demo />}</StrictMode>,
 );
