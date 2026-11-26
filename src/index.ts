@@ -13,3 +13,10 @@ export { ConfirmAction, type ConfirmActionProps } from './components/ConfirmActi
 export { NotFoundPage, type NotFoundPageProps } from './components/NotFoundPage';
 export { ErrorBoundary, type ErrorBoundaryProps } from './components/ErrorBoundary';
 export { isProblem, parseProblem, type FieldError, type Problem } from './api/problem';
+export { AuthProvider, useAuth, type AuthProviderProps } from './auth/AuthProvider';
+export { RequireAuth, type RequireAuthProps } from './auth/RequireAuth';
+export { AuthCallback } from './auth/AuthCallback';
+export { LoginPage, type LoginPageProps } from './auth/LoginPage';
+export { UserMenu } from './auth/UserMenu';
+export { createAuthFetch, type AuthFetchOptions } from './auth/authFetch';
+export { AuthError, type AuthApi, type AuthStatus, type AuthUser } from './auth/types';
