@@ -1,0 +1,9 @@
+dist/
+out/
+node_modules/
+package-lock.json
+testdata/consumer-app/node_modules/
+testdata/consumer-app/dist/
+testdata/consumer-app/package-lock.json
+test-results/
+playwright-report/
