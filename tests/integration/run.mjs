@@ -7,6 +7,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +40,17 @@ function capture(command, args, options = {}) {
 
 function nodeBin(packageDir, relative, args, options = {}) {
   run(process.execPath, [join(packageDir, 'node_modules', relative), ...args], options);
+}
+
+function freePort() {
+  return new Promise((resolvePort, reject) => {
+    const probe = createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close(() => resolvePort(port));
+    });
+  });
 }
 
 async function waitForServer(url, timeoutMs = 30000) {
@@ -84,14 +96,28 @@ try {
   if (/from\s+['"]https?:/.test(indexJs) || /import\s*\(\s*['"]https?:/.test(indexJs)) {
     fail('dist/index.js imports a URL');
   }
-  if (
-    !/from\s*["']react\/jsx-runtime["']/.test(indexJs) ||
-    !/from\s*["']@mantine\/core["']/.test(indexJs)
-  ) {
-    fail('dist/index.js does not import React and Mantine as external packages');
+  // Check the import specifiers of all JavaScript files of dist/. Each specifier must be
+  // relative, a Node.js built-in, or a peer dependency of the kit. This catches an import
+  // of a copy of React or Mantine at a path that is not the peer package.
+  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const peers = Object.keys(pkg.peerDependencies ?? {});
+  const allowedImport = (spec) =>
+    spec.startsWith('./') ||
+    spec.startsWith('../') ||
+    spec.startsWith('node:') ||
+    peers.some((peer) => spec === peer || spec.startsWith(`${peer}/`));
+  const imported = new Set();
+  for (const file of listing.filter((name) => /^package\/dist\/.*\.js$/.test(name))) {
+    const code = capture('tar', ['-xzOf', basename(tarball), file], { cwd: packDir });
+    for (const match of code.matchAll(/(?:\bfrom|\bimport)\s*\(?\s*["']([^"']+)["']/g)) {
+      if (!allowedImport(match[1])) fail(`${file} imports ${match[1]}. It is not a peer package.`);
+      imported.add(match[1]);
+    }
+    if (/__SECRET_INTERNALS_DO_NOT_USE/.test(code)) fail(`${file} has a copy of React`);
   }
-  if (/__SECRET_INTERNALS_DO_NOT_USE/.test(indexJs)) fail('dist/index.js has a copy of React');
-  if (indexJs.length > 200_000) fail('dist/index.js is too large. It can have a copy of a peer.');
+  for (const spec of ['react/jsx-runtime', '@mantine/core']) {
+    if (!imported.has(spec)) fail(`dist does not import ${spec} as an external package`);
+  }
 
   // I2: install the tarball in the consumer app and build.
   console.log('== I2: install the tarball and build the consumer app');
@@ -157,6 +183,7 @@ try {
 
   // I3 to I6, I8, I9: serve the app and run Playwright.
   console.log('== I3 to I6, I8, I9: browser tests');
+  const port = await freePort();
   server = spawn(
     process.execPath,
     [
@@ -165,13 +192,16 @@ try {
       '--host',
       '127.0.0.1',
       '--port',
-      '4173',
+      String(port),
       '--strictPort',
     ],
     { cwd: app, stdio: 'inherit' },
   );
-  await waitForServer('http://127.0.0.1:4173/');
-  nodeBin(root, '@playwright/test/cli.js', ['test'], { cwd: root });
+  await waitForServer(`http://127.0.0.1:${port}/`);
+  nodeBin(root, '@playwright/test/cli.js', ['test'], {
+    cwd: root,
+    env: { ...process.env, UI_KIT_TEST_PORT: String(port) },
+  });
 } catch (error) {
   process.exitCode = 1;
   console.error(error instanceof Error ? error.message : error);

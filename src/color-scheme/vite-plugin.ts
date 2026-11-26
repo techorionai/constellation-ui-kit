@@ -21,7 +21,7 @@ export function constellationColorScheme(): Plugin {
       base = config.base.endsWith('/') ? config.base : `${config.base}/`;
     },
     configureServer(server) {
-      server.middlewares.use(`/${FILE_NAME}`, (_req, res) => {
+      server.middlewares.use(`${base}${FILE_NAME}`, (_req, res) => {
         res.setHeader('Content-Type', 'text/javascript');
         res.end(readScript());
       });

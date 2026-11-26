@@ -10,13 +10,16 @@ export interface ConfirmActionProps {
   title?: string;
   /** Text of the modal. */
   message: ReactNode;
-  /** Runs when the user confirms. A rejection with a `Problem` shows in the modal. */
+  /** Runs when the user confirms. A rejection with a `Problem` shows in the modal. Any other rejection shows a general problem with the status 0. */
   onConfirm: () => Promise<void> | void;
   /** True for a destructive action. The confirm button is red. */
   danger?: boolean;
   /** Text of the confirm button. The default is "Continue". */
   confirmLabel?: string;
 }
+
+/** Status of the problem for a rejection that is not a `Problem`. 0 is not an HTTP status. It means that no response exists. */
+const UNKNOWN_STATUS = 0;
 
 /** Button that asks for a confirmation in a modal before it runs an action. */
 export function ConfirmAction({
@@ -51,7 +54,7 @@ export function ConfirmAction({
     } catch (error) {
       running.current = false;
       setLoading(false);
-      setProblem(isProblem(error) ? error : fallbackProblem(0));
+      setProblem(isProblem(error) ? error : fallbackProblem(UNKNOWN_STATUS));
     }
   };
 
@@ -69,7 +72,7 @@ export function ConfirmAction({
         withCloseButton={!loading}
       >
         <Stack>
-          <Text>{message}</Text>
+          <Text component="div">{message}</Text>
           {problem ? <ProblemAlert problem={problem} /> : null}
           <Group justify="flex-end">
             <Button variant="default" onClick={close} disabled={loading}>

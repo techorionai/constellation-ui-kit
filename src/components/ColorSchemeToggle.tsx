@@ -38,7 +38,11 @@ function MoonIcon() {
   );
 }
 
-/** Button that changes the color scheme between light and dark. */
+/**
+ * Button that changes the color scheme between light and dark.
+ * It reads the color scheme in the first render. Use it in a single-page app that renders on the client only.
+ * Server-side rendering gives a hydration mismatch.
+ */
 export function ColorSchemeToggle() {
   const { setColorScheme } = useMantineColorScheme();
   const computed = useComputedColorScheme('light', { getInitialValueInEffect: false });

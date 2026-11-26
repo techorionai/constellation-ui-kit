@@ -36,11 +36,23 @@ describe('AppLayout', () => {
 
   // U5
   it('U5 opens the navbar with the burger button', async () => {
-    const user = userEvent.setup();
-    renderWithProvider(<AppLayout appName="Helpdesk" navItems={items} />);
-    const burger = screen.getByLabelText('Toggle navigation');
-    expect(burger).toHaveAttribute('aria-expanded', 'false');
-    await user.click(burger);
-    expect(burger).toHaveAttribute('aria-expanded', 'true');
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      ...original(query),
+      matches: query.includes('max-width'),
+    })) as typeof window.matchMedia;
+    try {
+      const user = userEvent.setup();
+      renderWithProvider(<AppLayout appName="Helpdesk" navItems={items} />);
+      const burger = screen.getByLabelText('Toggle navigation');
+      const navbar = screen.getByRole('navigation', { hidden: true });
+      expect(burger).toHaveAttribute('aria-expanded', 'false');
+      expect(navbar).toHaveAttribute('inert');
+      await user.click(burger);
+      expect(burger).toHaveAttribute('aria-expanded', 'true');
+      expect(navbar).not.toHaveAttribute('inert');
+    } finally {
+      window.matchMedia = original;
+    }
   });
 });

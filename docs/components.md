@@ -30,7 +30,7 @@ Title (`h1`), optional `description`, and an `actions` slot.
 
 ## ColorSchemeToggle
 
-Button that changes the color scheme between light and dark. It has an accessible name that tells the next scheme.
+Button that changes the color scheme between light and dark. It has an accessible name that tells the next scheme. It reads the color scheme in the first render. Use it in a single-page app that renders on the client only. Server-side rendering gives a hydration mismatch.
 
 ## LoadingState
 
@@ -61,7 +61,7 @@ Button that opens a modal with a text, a "Cancel" button, and a "Continue" butto
 | `danger`       | If true, the "Continue" button is red.      |
 | `confirmLabel` | Text of the "Continue" button.              |
 
-While the promise runs, "Continue" shows a loader and the two buttons are disabled. A second click does not call `onConfirm` again. If the promise rejects with a `Problem`, the modal shows it with `ProblemAlert`. If it rejects with another value, the modal shows a general `Problem` ("Request failed") and no error text.
+While the promise runs, "Continue" shows a loader and the two buttons are disabled. A second click does not call `onConfirm` again. If the promise rejects with a `Problem`, the modal shows it with `ProblemAlert`. If it rejects with another value, the modal shows a general `Problem` ("Request failed") with the status 0 and no error text. The status 0 is not an HTTP status. It means that no response exists.
 
 ## NotFoundPage
 

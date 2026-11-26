@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
-const ORIGIN = 'http://127.0.0.1:4173';
+const ORIGIN = `http://127.0.0.1:${process.env.UI_KIT_TEST_PORT ?? '4173'}`;
 
 async function collectCspViolations(page: Page) {
   await page.addInitScript(() => {
